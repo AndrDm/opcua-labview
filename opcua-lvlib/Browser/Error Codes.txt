@@ -1,0 +1,2 @@
+6001: Node Not Found
+6002: Node Is Not Unique

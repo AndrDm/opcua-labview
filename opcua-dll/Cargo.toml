@@ -1,0 +1,45 @@
+[package]
+name = "opcua"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs" # Add this line
+
+[package.metadata.windows]
+windows_version = "0.0.0.1"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+libc = "0.2.170"
+mem = "0.5.0"
+chrono = { version = "^0.4", features = ["serde"] }
+log = "^0.4"
+tokio = { version = "^1", features = ["full"] }
+tokio-util = { version = "^0.7", features = ["codec"] }
+# winapi = "0.3.9"
+# user32-sys = "0.2.0"
+# kernel32-sys = "0.2.2"
+# win_dbg_logger = "0.1.0"
+build-print = "0.1.1"
+
+
+[build-dependencies]
+# build_print = "0.1.4"
+winres = "0.1"
+
+[dependencies.async-opcua]
+path = "../opcua-rust/async-opcua"
+features = ["client", "server", "console-logging"]
+default-features = false
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+# [dependencies.windows]
+# version = "0.*"
+# features = [
+#     "Win32_Foundation",
+#     "Win32_System_SystemServices",
+#     "Win32_UI_WindowsAndMessaging",
+#]
