@@ -6,6 +6,7 @@
 // Created on:	14-MAR-2025 by AD.
 // License: MPL-2.0
 //
+// 21-MAR-2025 - ns added
 //==============================================================================
 
 use opcua::{
@@ -24,6 +25,7 @@ macro_rules! create_lv_read_variable {
 			rt_ptr: *mut Runtime,
 			lv_session: *mut Arc<Session>,
 			vurl: *const i8,
+			ns: u16,
 			output: *mut $c_type,
 		) -> i32 {
 			if lv_session.is_null() {
@@ -46,7 +48,7 @@ macro_rules! create_lv_read_variable {
 				let var = rt.block_on(async {
 					session
 						.read(
-							&[NodeId::new(2, vurl_str).into()],
+							&[NodeId::new(ns, vurl_str).into()],
 							TimestampsToReturn::Both,
 							0.0,
 						)

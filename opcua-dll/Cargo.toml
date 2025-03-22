@@ -1,6 +1,6 @@
 [package]
 name = "opcua"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 build = "build.rs" # Add this line
 
@@ -30,7 +30,7 @@ winres = "0.1"
 
 [dependencies.async-opcua]
 path = "../opcua-rust/async-opcua"
-features = ["client", "server", "console-logging"]
+features = ["client", "server", "console-logging", "json", "xml"]
 default-features = false
 
 [target.'cfg(windows)'.build-dependencies]

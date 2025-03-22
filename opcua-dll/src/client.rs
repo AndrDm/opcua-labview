@@ -6,20 +6,30 @@
 // Created on:	08-MAR-2025 by AD.
 // License: MPL-2.0
 //
+// 21-MAR-2025 - load client from config + GetNodeInfo
 //==============================================================================
 #![allow(unused_must_use)] //on cleanup unused result #ToDo-fix it
 use crate::errors::*;
 
 use opcua::types::StatusCode;
-use std::{path::PathBuf, sync::Arc};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 //use log::warn;
+use libc::c_char;
 use opcua::{
 	client::{Client, ClientBuilder, ClientConfig, IdentityToken, Session, SessionEventLoop},
 	core::config::Config,
 	crypto::SecurityPolicy,
-	types::{MessageSecurityMode, NodeId, TimestampsToReturn, UserTokenPolicy, Variant},
+	types::{
+		AttributeId, MessageSecurityMode, NodeId, ReadValueId, TimestampsToReturn, UserTokenPolicy,
+		Variant,
+	},
+};
+use std::{
+	fmt::Write,
+	path::PathBuf,
+	sync::Arc,
+	{ffi::CString, os::raw::c_int},
 };
 
 #[macro_use]
@@ -60,14 +70,19 @@ pub extern "C" fn lvClientBuilder(client_out: *mut *mut Client) -> i32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn lvClientBuilderFile(client_out: *mut *mut Client) -> i32 {
+pub extern "C" fn lvClientBuilderFile(
+	config_path_str: *const c_char,
+	client_out: *mut *mut Client,
+) -> i32 {
 	if client_out.is_null() {
 		return ERR_INVALID_CLIENT_REF; // Error: null output pointer
 	}
 
 	// Make the client configuration
-	let config_file = "";
-	let client = Client::new(ClientConfig::load(&PathBuf::from(config_file)).unwrap());
+	//let config_file = "";
+	let config_path_str = cstr_to_string!(config_path_str);
+	//let client = Client::new(ClientConfig::load(&PathBuf::from(config_file)).unwrap());
+	let client = Client::new(ClientConfig::load(&PathBuf::from(config_path_str)).unwrap());
 
 	unsafe {
 		// Store the boxed client in the output pointer
@@ -216,6 +231,133 @@ pub extern "C" fn lv_connect_simple(
 	}
 }
 
+// GetNode Atributes to LV String
+
+#[allow(unused)]
+pub fn read_value_id(attribute: AttributeId, id: impl Into<NodeId>) -> ReadValueId {
+	let node_id = id.into();
+	ReadValueId {
+		node_id,
+		attribute_id: attribute as u32,
+		..Default::default()
+	}
+}
+
+#[allow(unused)]
+pub fn read_value_ids(attributes: &[AttributeId], id: impl Into<NodeId>) -> Vec<ReadValueId> {
+	let node_id = id.into();
+	attributes
+		.iter()
+		.map(|a| read_value_id(*a, &node_id))
+		.collect()
+}
+// Will be better to move common and LabVIEW-specific stuff into labview.rs (may be later)
+#[cfg(target_arch = "x86_64")]
+#[repr(C)]
+pub struct LStr {
+	cnt: i32,
+	str: [u8; 0],
+}
+#[cfg(target_arch = "x86")]
+#[repr(C, packed(1))]
+pub struct LStr {
+	cnt: i32,
+	str: [u8; 0],
+}
+
+type LStrHandle = *mut *mut LStr;
+
+unsafe extern "C" {
+	// in latest Rust must be unsafe!
+	#[link_name = "NumericArrayResize"]
+	// Use link_name if the function is named differently in the DLL
+	fn string_resize(
+		numeric_type: u32, // This should be u32, based on LabVIEW documentation
+		num_dimensions: i32,
+		data_handle: *mut LStrHandle, // LabVIEW uses UHandle for array resizing.
+		new_size: usize,              // New size of the array
+	) -> c_int;
+}
+
+unsafe extern "C" {
+	#[link_name = "MoveBlock"]
+	fn MoveBlockChar(src: *const i8, destination: *mut u8, size: usize);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn lv_get_node_info(
+	rt_ptr: *mut Runtime,
+	session_in: *mut Arc<Session>,
+	id_u32: u32,
+	id_str: *const i8,
+	ns: u16,
+	id_type: u32,
+	mut lv_str: LStrHandle,
+) -> i32 {
+	check_runtime!(rt_ptr);
+
+	unsafe {
+		let rt = &mut *rt_ptr;
+		if !session_in.is_null() {
+			// let session = Box::from_raw(session_in); //Very bad idea, crashed after few calls!
+			let session = &mut *session_in;
+			// let id: NodeId = NodeId::new(2, "MyVariable").into(); //Jst for test
+			let id: NodeId;
+			match id_type {
+				1 => id = NodeId::new(0, id_u32).into(), //so works so far
+				2 => id = NodeId::new(ns, cstr_to_string!(id_str)).into(),
+				_ => return ERR_INVALID_TYPE,
+			}
+
+			let r = rt.block_on(async {
+				session
+					.read(
+						&read_value_ids(
+							&[
+								AttributeId::Value,
+								AttributeId::DisplayName,
+								AttributeId::BrowseName,
+								//AttributeId::NodeClass, //lot of Attributes available
+								//AttributeId::NodeId,
+								//AttributeId::Historizing,
+								//AttributeId::ArrayDimensions,
+								//AttributeId::Description,
+								//AttributeId::ValueRank,
+								//AttributeId::DataType,
+								//AttributeId::AccessLevel,
+								//AttributeId::UserAccessLevel,
+							],
+							&id,
+						),
+						TimestampsToReturn::Both,
+						0.0,
+					)
+					.await
+					.unwrap()
+			});
+
+			let mut i = 0;
+			let mut output = String::new();
+
+			while i < r.len() {
+				write!(&mut output, "Attribute {}: {:?}\n", i, r[i])
+					.expect("Failed to get attribute");
+				i = i + 1;
+			}
+			let len = output.len();
+			string_resize(1, 1, &mut lv_str as *mut LStrHandle, len);
+
+			let c_headers = match CString::new(output) {
+				Ok(cs) => cs,
+				Err(_) => return -1, // failed to convert to C string
+			};
+			MoveBlockChar(c_headers.as_ptr(), (**lv_str).str.as_mut_ptr(), len);
+			(**lv_str).cnt = len as i32;
+		}
+	}
+	return 0;
+}
+
 // Update cleanup function to handle Arc types
 #[unsafe(no_mangle)]
 pub extern "C" fn lv_cleanup_session(
@@ -231,6 +373,8 @@ pub extern "C" fn lv_cleanup_session(
 		if !session_in.is_null() {
 			let session = Box::from_raw(session_in);
 			let handle = Box::from_raw(handle_in);
+			//let session = &mut *session_in; //let try this way, no was better
+			//let handle = &mut *handle_in;
 			//session.disconnect().await;
 			//let result = runtime.block_on(async {
 			rt.block_on(async { session.disconnect().await });
@@ -244,6 +388,7 @@ pub extern "C" fn lv_cleanup_session(
 
 	return 0;
 }
+/*
 
 #[cfg(target_arch = "x86_64")]
 #[repr(C)]
@@ -277,7 +422,7 @@ pub struct LStr1Darray {
 //
 // #ToDo: Subscription will be the next iteration
 // check https://forums.ni.com/t5/LabVIEW/How-to-pass-and-set-Variants-in-the-DLL/m-p/4428062#M1305803
-/*
+
 use std::ptr::addr_of;
 #[unsafe(no_mangle)]
 pub extern "C" fn lv_subscribe_to_variables_i32var(

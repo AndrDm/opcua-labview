@@ -76,6 +76,7 @@ dependencies = [
  "async-opcua-nodes",
  "async-opcua-server",
  "async-opcua-types",
+ "async-opcua-xml",
  "chrono",
  "env_logger",
  "log",
@@ -166,6 +167,7 @@ version = "0.14.0"
 dependencies = [
  "async-opcua-macros",
  "async-opcua-types",
+ "async-opcua-xml",
  "bitflags",
  "hashbrown",
  "log",
@@ -202,6 +204,7 @@ name = "async-opcua-types"
 version = "0.14.0"
 dependencies = [
  "async-opcua-macros",
+ "async-opcua-xml",
  "base64",
  "bitflags",
  "byteorder",
@@ -210,6 +213,18 @@ dependencies = [
  "log",
  "percent-encoding-rfc3986",
  "regex",
+ "struson",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
+name = "async-opcua-xml"
+version = "0.14.0"
+dependencies = [
+ "chrono",
+ "quick-xml",
+ "roxmltree",
  "thiserror",
  "uuid",
 ]
@@ -464,6 +479,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "duplicate"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97af9b5f014e228b33e77d75ee0e6e87960124f0f4b16337b586a6bec91867b1"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+]
+
+[[package]]
 name = "embedded-io"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -705,6 +731,12 @@ dependencies = [
  "spin",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
@@ -1085,7 +1117,7 @@ checksum = "945462a4b81e43c4e3ba96bd7b49d834c6f61198356aa858733bc4acf3cbe62e"
 
 [[package]]
 name = "opcua"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-opcua",
  "build-print",
@@ -1207,6 +1239,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro2-diagnostics"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "version_check",
+ "yansi",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.37.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165859e9e55f79d67b96c5d96f4e88b6f2695a1972849c15a6a3f5c59fc2c003"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1282,6 +1336,12 @@ name = "regex-syntax"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+
+[[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rsa"
@@ -1486,6 +1546,39 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "strum"
+version = "0.26.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
+]
+
+[[package]]
+name = "struson"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18c68ef850864c0fa120c07a17d6369ec4df02a33cad4aa593e0e0566e031bda"
+dependencies = [
+ "duplicate",
+ "strum",
+ "thiserror",
+]
 
 [[package]]
 name = "subtle"
@@ -1910,6 +2003,12 @@ dependencies = [
  "spki",
  "tls_codec",
 ]
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoke"
