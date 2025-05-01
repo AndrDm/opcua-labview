@@ -3,7 +3,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use log::error;
 use opcua_core::{
     comms::{
         buffer::SendBuffer,
@@ -16,6 +15,8 @@ use opcua_core::{
     },
     RequestMessage, ResponseMessage,
 };
+use tracing::error;
+use tracing_futures::Instrument;
 
 use crate::info::ServerInfo;
 use opcua_types::{DecodingOptions, Error, ResponseHeader, ServiceFault, StatusCode};
@@ -210,7 +211,7 @@ impl Connector for TcpConnector {
             _ = token.cancelled() => {
                 ErrorMessage::new(StatusCode::BadServerHalted, "Server closed")
             }
-            r = self.connect_inner(info) => {
+            r = self.connect_inner(info).instrument(tracing::info_span!("OPC-UA TCP handshake")) => {
                 match r {
                     Ok(r) => return Ok(TcpTransport::new(self.read, self.write, r)),
                     Err(e) => e,
@@ -269,7 +270,7 @@ impl TcpTransport {
         match self.send_buffer.write(request_id, message, channel) {
             Ok(_) => Ok(()),
             Err(e) => {
-                log::warn!("Failed to encode outgoing message: {e:?}");
+                tracing::warn!("Failed to encode outgoing message: {e:?}");
                 if let Some((request_id, request_handle)) = e.full_context() {
                     self.send_buffer.write(
                         request_id,

@@ -27,13 +27,15 @@ use libc::c_char;
 use opcua::{
 	server::{
 		node_manager::memory::{
-			InMemoryNodeManager, NamespaceMetadata, SimpleNodeManager, SimpleNodeManagerImpl,
-			simple_node_manager,
+			InMemoryNodeManager, /* NamespaceMetadata, */ SimpleNodeManager,
+			SimpleNodeManagerImpl, simple_node_manager,
 		},
 		{Server, ServerBuilder, ServerHandle},
 	},
 	types::{BuildInfo, DateTime, NodeId},
 };
+
+use opcua::server::diagnostics::node_manager::NamespaceMetadata;
 
 pub static mut SERVER_GLOBAL_RUNTIME: Option<Arc<Mutex<Runtime>>> = None;
 

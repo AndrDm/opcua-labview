@@ -3,15 +3,22 @@ use std::collections::{HashMap, HashSet};
 use convert_case::{Case, Casing};
 use proc_macro2::Span;
 use syn::{
-    parse_quote, punctuated::Punctuated, FieldsNamed, File, Generics, Ident, Item, ItemEnum,
-    ItemImpl, ItemMacro, ItemStruct, Lit, LitByte, Path, Token, Type, Visibility,
+    parse_quote, parse_str, punctuated::Punctuated, FieldsNamed, File, Generics, Item, ItemEnum,
+    ItemMacro, ItemStruct, Lit, LitByte, Path, Token, Type, Visibility,
 };
+use tracing::warn;
 
 use crate::{
-    error::CodeGenError, utils::safe_ident, GeneratedOutput, StructuredType, BASE_NAMESPACE,
+    error::CodeGenError,
+    utils::{safe_ident, RenderExpr},
+    GeneratedOutput, BASE_NAMESPACE,
 };
 
-use super::{enum_type::EnumReprType, loader::LoadedType, EnumType, ExternalType};
+use super::{
+    encoding_ids::EncodingIds,
+    loaders::{EnumReprType, EnumType, FieldType, StructureFieldType, StructuredType},
+    ExternalType, LoadedType,
+};
 use quote::quote;
 
 pub enum ItemDefinition {
@@ -20,31 +27,9 @@ pub enum ItemDefinition {
     BitField(ItemMacro),
 }
 
-#[derive(Clone)]
-pub struct EncodingIds {
-    pub data_type: Ident,
-    pub xml: Ident,
-    pub json: Ident,
-    pub binary: Ident,
-}
-
-impl EncodingIds {
-    pub fn new(root: &str) -> Self {
-        Self {
-            data_type: Ident::new(root, Span::call_site()),
-            xml: Ident::new(&format!("{}_Encoding_DefaultXml", root), Span::call_site()),
-            json: Ident::new(&format!("{}_Encoding_DefaultJson", root), Span::call_site()),
-            binary: Ident::new(
-                &format!("{}_Encoding_DefaultBinary", root),
-                Span::call_site(),
-            ),
-        }
-    }
-}
-
 pub struct GeneratedItem {
     pub item: ItemDefinition,
-    pub impls: Vec<ItemImpl>,
+    pub impls: Vec<Item>,
     pub module: String,
     pub name: String,
     pub encoding_ids: Option<EncodingIds>,
@@ -59,7 +44,7 @@ impl GeneratedOutput for GeneratedItem {
             ItemDefinition::BitField(v) => items.push(Item::Macro(v)),
         }
         for imp in self.impls {
-            items.push(Item::Impl(imp));
+            items.push(imp);
         }
 
         File {
@@ -81,12 +66,13 @@ impl GeneratedOutput for GeneratedItem {
 pub struct CodeGenItemConfig {
     pub enums_single_file: bool,
     pub structs_single_file: bool,
+    pub node_ids_from_nodeset: bool,
 }
 
 pub struct ImportType {
     path: String,
     has_default: Option<bool>,
-    base_type: Option<String>,
+    base_type: Option<FieldType>,
     is_defined: bool,
 }
 
@@ -97,6 +83,7 @@ pub struct CodeGenerator {
     config: CodeGenItemConfig,
     target_namespace: String,
     native_types: HashSet<String>,
+    id_path: String,
 }
 
 impl CodeGenerator {
@@ -107,6 +94,7 @@ impl CodeGenerator {
         default_excluded: HashSet<String>,
         config: CodeGenItemConfig,
         target_namespace: String,
+        id_path: String,
     ) -> Self {
         Self {
             import_map: external_import_map
@@ -115,9 +103,15 @@ impl CodeGenerator {
                     (
                         k,
                         ImportType {
-                            path: v.path,
                             has_default: v.has_default,
-                            base_type: v.base_type,
+                            base_type: match v.base_type.as_deref() {
+                                Some("ExtensionObject" | "OptionSet") => {
+                                    Some(FieldType::ExtensionObject(None))
+                                }
+                                Some(t) => Some(FieldType::Normal(t.to_owned())),
+                                None => None,
+                            },
+                            path: v.path,
                             is_defined: true,
                         },
                     )
@@ -131,6 +125,7 @@ impl CodeGenerator {
             default_excluded,
             target_namespace,
             native_types,
+            id_path,
         }
     }
 
@@ -160,8 +155,10 @@ impl CodeGenerator {
             LoadedType::Struct(s) => {
                 for k in &s.fields {
                     let has_default = match &k.typ {
-                        crate::StructureFieldType::Field(f) => self.is_default_recursive(f),
-                        crate::StructureFieldType::Array(_) => true,
+                        StructureFieldType::Field(FieldType::Normal(f)) => {
+                            self.is_default_recursive(f)
+                        }
+                        StructureFieldType::Array(_) | StructureFieldType::Field(_) => true,
                     };
                     if !has_default {
                         return false;
@@ -262,11 +259,14 @@ impl CodeGenerator {
     fn generate_bitfield(&self, item: EnumType) -> Result<GeneratedItem, CodeGenError> {
         let mut body = quote! {};
         let ty: Type = syn::parse_str(&item.typ.to_string())?;
-        if let Some(doc) = item.documentation {
-            body.extend(quote! {
+        let doc_tokens = if let Some(doc) = item.documentation {
+            quote! {
                 #[doc = #doc]
-            });
-        }
+            }
+        } else {
+            quote! {}
+        };
+
         let mut variants = quote! {};
 
         for field in &item.values {
@@ -304,7 +304,14 @@ impl CodeGenerator {
                     parse_quote! { #value }
                 }
             };
+            let mut attrs = quote! {};
+            if let Some(doc) = &field.documentation {
+                attrs.extend(quote! {
+                    #[doc = #doc]
+                });
+            }
             variants.extend(quote! {
+                #attrs
                 const #name = #value_token;
             });
         }
@@ -313,6 +320,7 @@ impl CodeGenerator {
         body.extend(quote! {
             bitflags::bitflags! {
                 #[derive(Debug, Copy, Clone, PartialEq)]
+                #doc_tokens
                 pub struct #enum_ident: #ty {
                     #variants
                 }
@@ -320,10 +328,6 @@ impl CodeGenerator {
         });
 
         let mut impls = Vec::new();
-        let size: usize = item.size.try_into().map_err(|_| {
-            CodeGenError::other(format!("Value {} does not fit in a usize", item.size))
-        })?;
-        let write_method = Ident::new(&format!("write_{}", item.typ), Span::call_site());
 
         impls.push(parse_quote! {
             impl opcua::types::UaNullable for #enum_ident {
@@ -332,25 +336,13 @@ impl CodeGenerator {
                 }
             }
         });
-
         impls.push(parse_quote! {
-            impl opcua::types::BinaryEncodable for #enum_ident {
-                fn byte_len(&self, _ctx: &opcua::types::Context<'_>) -> usize {
-                    #size
-                }
-
-                fn encode<S: std::io::Write + ?Sized>(&self, stream: &mut S, _ctx: &opcua::types::Context<'_>) -> opcua::types::EncodingResult<()> {
-                    opcua::types::#write_method(stream, self.bits())
-                }
-            }
-        });
-
-        impls.push(parse_quote! {
-            impl opcua::types::BinaryDecodable for #enum_ident {
-                fn decode<S: std::io::Read + ?Sized>(stream: &mut S, ctx: &opcua::types::Context<'_>) -> opcua::types::EncodingResult<Self> {
-                    Ok(Self::from_bits_truncate(#ty::decode(stream, ctx)?))
-                }
-            }
+            opcua::types::impl_encoded_as!(
+                #enum_ident,
+                |v| Ok(#enum_ident::from_bits_truncate(v)),
+                |v: &#enum_ident| Ok::<_, opcua::types::Error>(v.bits()),
+                |v: &#enum_ident| v.bits().byte_len()
+            );
         });
 
         impls.push(parse_quote! {
@@ -369,64 +361,11 @@ impl CodeGenerator {
             }
         });
 
-        impls.push(parse_quote! {
-            #[cfg(feature = "xml")]
-            impl opcua::types::xml::XmlDecodable for #enum_ident {
-                fn decode(
-                    stream: &mut opcua::types::xml::XmlStreamReader<&mut dyn std::io::Read>,
-                    ctx: &opcua::types::Context<'_>,
-                ) -> opcua::types::EncodingResult<Self> {
-                    Ok(Self::from_bits_truncate(#ty::decode(stream, ctx)?))
-                }
-            }
-        });
-
-        impls.push(parse_quote! {
-            #[cfg(feature = "xml")]
-            impl opcua::types::xml::XmlEncodable for #enum_ident {
-                fn encode(
-                    &self,
-                    stream: &mut opcua::types::xml::XmlStreamWriter<&mut dyn std::io::Write>,
-                    ctx: &opcua::types::Context<'_>,
-                ) -> opcua::types::EncodingResult<()> {
-                    self.bits().encode(stream, ctx)
-                }
-            }
-        });
-
         let name = &item.name;
         impls.push(parse_quote! {
             #[cfg(feature = "xml")]
             impl opcua::types::xml::XmlType for #enum_ident {
                 const TAG: &'static str = #name;
-            }
-        });
-
-        impls.push(parse_quote! {
-            #[cfg(feature = "json")]
-            impl opcua::types::json::JsonDecodable for #enum_ident {
-                fn decode(
-                    stream: &mut opcua::types::json::JsonStreamReader<&mut dyn std::io::Read>,
-                    _ctx: &opcua::types::Context<'_>,
-                ) -> opcua::types::EncodingResult<Self> {
-                    use opcua::types::json::JsonReader;
-                    Ok(Self::from_bits_truncate(stream.next_number()??))
-                }
-            }
-        });
-
-        impls.push(parse_quote! {
-            #[cfg(feature = "json")]
-            impl opcua::types::json::JsonEncodable for #enum_ident {
-                fn encode(
-                    &self,
-                    stream: &mut opcua::types::json::JsonStreamWriter<&mut dyn std::io::Write>,
-                    _ctx: &opcua::types::Context<'_>,
-                ) -> opcua::types::EncodingResult<()> {
-                    use opcua::types::json::JsonWriter;
-                    stream.number_value(self.bits())?;
-                    Ok(())
-                }
             }
         });
 
@@ -470,7 +409,7 @@ impl CodeGenerator {
         });
 
         for field in &item.values {
-            let (name, _) = safe_ident(&field.name);
+            let (name, renamed) = safe_ident(&field.name);
             let value = field.value;
             let is_default = if let Some(default_name) = &item.default_value {
                 &name.to_string() == default_name
@@ -511,16 +450,27 @@ impl CodeGenerator {
                 }
             };
 
+            let mut attrs = quote! {};
             if is_default {
-                variants.push(parse_quote! {
+                attrs.extend(quote! {
                     #[opcua(default)]
-                    #name = #value_token
-                })
-            } else {
-                variants.push(parse_quote! {
-                    #name = #value_token
-                })
+                });
             }
+            if let Some(doc) = &field.documentation {
+                attrs.extend(quote! {
+                    #[doc = #doc]
+                });
+            }
+            if renamed {
+                let orig = &field.name;
+                attrs.extend(quote! {
+                    #[opcua(rename = #orig)]
+                });
+            }
+            variants.push(parse_quote! {
+                #attrs
+                #name = #value_token
+            })
         }
 
         let (enum_ident, renamed) = safe_ident(&item.name);
@@ -554,24 +504,22 @@ impl CodeGenerator {
         })
     }
 
-    fn is_extension_object(&self, typ: &str) -> bool {
-        if typ == "ua:ExtensionObject" || typ == "ua:OptionSet" {
-            return true;
-        }
-
-        let name = match typ.split_once(":") {
+    fn is_extension_object(&self, typ: Option<&FieldType>) -> bool {
+        let name = match &typ {
+            Some(FieldType::Abstract(_)) | Some(FieldType::ExtensionObject(_)) => return true,
+            Some(FieldType::Normal(s)) => s,
+            None => return false,
+        };
+        let name = match name.split_once(":") {
             Some((_, n)) => n,
-            None => typ,
+            None => name,
         };
 
         let Some(parent) = self.import_map.get(name) else {
             return false;
         };
-        if let Some(p) = &parent.base_type {
-            self.is_extension_object(p)
-        } else {
-            false
-        }
+
+        self.is_extension_object(parent.base_type.as_ref())
     }
 
     fn generate_struct(&self, item: StructuredType) -> Result<GeneratedItem, CodeGenError> {
@@ -607,9 +555,18 @@ impl CodeGenerator {
 
         for field in item.visible_fields() {
             let typ: Type = match &field.typ {
-                crate::StructureFieldType::Field(f) => syn::parse_str(&self.get_type_path(f))?,
-                crate::StructureFieldType::Array(f) => {
-                    let path: Path = syn::parse_str(&self.get_type_path(f))?;
+                StructureFieldType::Field(f) => {
+                    syn::parse_str(&self.get_type_path(f.as_type_str())).map_err(|e| {
+                        CodeGenError::from(e)
+                            .with_context(format!("Generating path for {}", f.as_type_str()))
+                    })?
+                }
+                StructureFieldType::Array(f) => {
+                    let path: Path =
+                        syn::parse_str(&self.get_type_path(f.as_type_str())).map_err(|e| {
+                            CodeGenError::from(e)
+                                .with_context(format!("Generating path for {}", f.as_type_str()))
+                        })?;
                     parse_quote! { Option<Vec<#path>> }
                 }
             };
@@ -618,8 +575,13 @@ impl CodeGenerator {
             if changed {
                 let orig = &field.original_name;
                 attrs = quote! {
-                    #[cfg_attr(any(feature = "json", feature = "xml"), opcua(rename = #orig))]
+                    #[opcua(rename = #orig)]
                 };
+            }
+            if let Some(doc) = &field.documentation {
+                attrs.extend(quote! {
+                    #[doc = #doc]
+                });
             }
             fields.push(parse_quote! {
                 #attrs
@@ -630,58 +592,100 @@ impl CodeGenerator {
         let mut encoding_ids = None;
         // Generate impls
         // Has message info
-        if item
-            .base_type
-            .as_ref()
-            .is_some_and(|v| self.is_extension_object(v))
-        {
-            let (encoding_ident, _) = safe_ident(&format!("{}_Encoding_DefaultBinary", item.name));
-            let (json_encoding_ident, _) =
-                safe_ident(&format!("{}_Encoding_DefaultJson", item.name));
-            let (xml_encoding_ident, _) = safe_ident(&format!("{}_Encoding_DefaultXml", item.name));
-            let (data_type_ident, _) = safe_ident(&item.name);
-            if self.is_base_namespace() {
-                impls.push(parse_quote! {
-                    impl opcua::types::MessageInfo for #struct_ident {
-                        fn type_id(&self) -> opcua::types::ObjectId {
-                            opcua::types::ObjectId::#encoding_ident
+        if self.is_extension_object(item.base_type.as_ref()) {
+            if self.config.node_ids_from_nodeset {
+                // To allow supporting the other encodings and not just panicing, use the data type id as fallback
+                // if the encoding type isn't set.
+                if let Some(ids) = item.base_type.and_then(|t| match t {
+                    FieldType::ExtensionObject(n) => n,
+                    _ => None,
+                }) {
+                    // Should not be null here, since ID is always set when generating from nodeset.
+                    // Ugly, but too much of a pain to work around. We don't have IDs at all when working
+                    // with BSDs.
+                    let id = item
+                        .id
+                        .as_ref()
+                        .ok_or_else(|| CodeGenError::other("Missing data type ID"))?;
+                    let binary_expr = ids.binary.as_ref().unwrap_or(id).value.render()?;
+                    let xml_expr = ids.xml.as_ref().unwrap_or(id).value.render()?;
+                    let json_expr = ids.json.as_ref().unwrap_or(id).value.render()?;
+                    let type_expr = id.value.render()?;
+                    let namespace = self.target_namespace.as_str();
+                    impls.push(parse_quote! {
+                        impl opcua::types::ExpandedMessageInfo for #struct_ident {
+                            fn full_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                opcua::types::ExpandedNodeId::from((#binary_expr, #namespace))
+                            }
+                            fn full_json_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                opcua::types::ExpandedNodeId::from((#json_expr, #namespace))
+                            }
+                            fn full_xml_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                opcua::types::ExpandedNodeId::from((#xml_expr, #namespace))
+                            }
+                            fn full_data_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                opcua::types::ExpandedNodeId::from((#type_expr, #namespace))
+                            }
                         }
-                        fn json_type_id(&self) -> opcua::types::ObjectId {
-                            opcua::types::ObjectId::#json_encoding_ident
-                        }
-                        fn xml_type_id(&self) -> opcua::types::ObjectId {
-                            opcua::types::ObjectId::#xml_encoding_ident
-                        }
-                        fn data_type_id(&self) -> opcua::types::DataTypeId {
-                            opcua::types::DataTypeId::#data_type_ident
-                        }
-                    }
-                });
+                    });
+                    encoding_ids = Some(EncodingIds::new_raw(&ids)?);
+                } else {
+                    warn!(
+                        "Type {} should be extension object but is missing encoding IDs, skipping",
+                        item.name
+                    )
+                }
             } else {
-                let namespace = self.target_namespace.as_str();
-                impls.push(parse_quote! {
-                    impl opcua::types::ExpandedMessageInfo for #struct_ident {
-                        fn full_type_id(&self) -> opcua::types::ExpandedNodeId {
-                            let id: opcua::types::NodeId = crate::ObjectId::#encoding_ident.into();
-                            opcua::types::ExpandedNodeId::from((id, #namespace))
+                let (encoding_ident, _) =
+                    safe_ident(&format!("{}_Encoding_DefaultBinary", item.name));
+                let (json_encoding_ident, _) =
+                    safe_ident(&format!("{}_Encoding_DefaultJson", item.name));
+                let (xml_encoding_ident, _) =
+                    safe_ident(&format!("{}_Encoding_DefaultXml", item.name));
+                let (data_type_ident, _) = safe_ident(&item.name);
+                let id_path: Path = parse_str(&self.id_path)?;
+                if self.is_base_namespace() {
+                    impls.push(parse_quote! {
+                        impl opcua::types::MessageInfo for #struct_ident {
+                            fn type_id(&self) -> opcua::types::ObjectId {
+                                opcua::types::ObjectId::#encoding_ident
+                            }
+                            fn json_type_id(&self) -> opcua::types::ObjectId {
+                                opcua::types::ObjectId::#json_encoding_ident
+                            }
+                            fn xml_type_id(&self) -> opcua::types::ObjectId {
+                                opcua::types::ObjectId::#xml_encoding_ident
+                            }
+                            fn data_type_id(&self) -> opcua::types::DataTypeId {
+                                opcua::types::DataTypeId::#data_type_ident
+                            }
                         }
-                        fn full_json_type_id(&self) -> opcua::types::ExpandedNodeId {
-                            let id: opcua::types::NodeId = crate::ObjectId::#json_encoding_ident.into();
-                            opcua::types::ExpandedNodeId::from((id, #namespace))
+                    });
+                } else {
+                    let namespace = self.target_namespace.as_str();
+                    impls.push(parse_quote! {
+                        impl opcua::types::ExpandedMessageInfo for #struct_ident {
+                            fn full_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                let id: opcua::types::NodeId = #id_path::ObjectId::#encoding_ident.into();
+                                opcua::types::ExpandedNodeId::from((id, #namespace))
+                            }
+                            fn full_json_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                let id: opcua::types::NodeId = #id_path::ObjectId::#json_encoding_ident.into();
+                                opcua::types::ExpandedNodeId::from((id, #namespace))
+                            }
+                            fn full_xml_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                let id: opcua::types::NodeId = #id_path::ObjectId::#xml_encoding_ident.into();
+                                opcua::types::ExpandedNodeId::from((id, #namespace))
+                            }
+                            fn full_data_type_id(&self) -> opcua::types::ExpandedNodeId {
+                                let id: opcua::types::NodeId = #id_path::DataTypeId::#data_type_ident.into();
+                                opcua::types::ExpandedNodeId::from((id, #namespace))
+                            }
                         }
-                        fn full_xml_type_id(&self) -> opcua::types::ExpandedNodeId {
-                            let id: opcua::types::NodeId = crate::ObjectId::#xml_encoding_ident.into();
-                            opcua::types::ExpandedNodeId::from((id, #namespace))
-                        }
-                        fn full_data_type_id(&self) -> opcua::types::ExpandedNodeId {
-                            let id: opcua::types::NodeId = crate::DataTypeId::#data_type_ident.into();
-                            opcua::types::ExpandedNodeId::from((id, #namespace))
-                        }
-                    }
-                });
+                    });
+                }
+                encoding_ids = Some(EncodingIds::new(id_path, &item.name)?);
             }
-
-            encoding_ids = Some(EncodingIds::new(&item.name));
         }
 
         let res = ItemStruct {

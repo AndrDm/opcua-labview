@@ -1,6 +1,6 @@
 use std::{self, fmt};
 
-use log::error;
+use tracing::error;
 
 use crate::{
     argument::Argument,
@@ -180,7 +180,7 @@ impl From<NodeId> for ReadValueId {
         ReadValueId {
             node_id,
             attribute_id: AttributeId::Value as u32,
-            index_range: UAString::null(),
+            index_range: NumericRange::None,
             data_encoding: QualifiedName::null(),
         }
     }
@@ -420,7 +420,7 @@ impl WriteValue {
     pub fn new(
         node_id: NodeId,
         attribute_id: AttributeId,
-        index_range: UAString,
+        index_range: NumericRange,
         value: DataValue,
     ) -> Self {
         Self {
@@ -437,7 +437,7 @@ impl WriteValue {
         Self {
             node_id,
             attribute_id: AttributeId::Value as u32,
-            index_range: UAString::null(),
+            index_range: NumericRange::None,
             value: val.into(),
         }
     }

@@ -374,7 +374,7 @@ macro_rules! value_wrapper {
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Description of a model contained in a nodeset file.
 pub struct ModelTableEntry {
     /// Role permissions that apply to this entry.
@@ -405,7 +405,7 @@ impl<'input> XmlLoad<'input> for ModelTableEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Table containing models defined in a nodeset file.
 pub struct ModelTable {
     /// List of models.
@@ -501,7 +501,7 @@ impl<'input> XmlLoad<'input> for LocalizedText {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Symbolic name.
 pub struct SymbolicName {
     /// Name alternatives.
@@ -551,7 +551,7 @@ impl<'input> XmlLoad<'input> for ListOfReferences {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Role permission for a node.
 pub struct RolePermission {
     /// Role ID.
@@ -569,7 +569,7 @@ impl<'input> XmlLoad<'input> for RolePermission {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// List of role permissions.
 pub struct ListOfRolePermissions {
     /// Role permissions.
@@ -952,7 +952,7 @@ impl FromValue for DataTypePurpose {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Field in a data type definition.
 pub struct DataTypeField {
     /// Possible display name translations.
@@ -999,7 +999,7 @@ impl<'input> XmlLoad<'input> for DataTypeField {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Data type definition.
 pub struct DataTypeDefinition {
     /// Fields in this data type.

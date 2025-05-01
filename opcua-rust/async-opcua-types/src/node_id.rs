@@ -181,7 +181,7 @@ mod json {
     use std::io::{Read, Write};
     use std::str::FromStr;
 
-    use log::warn;
+    use tracing::warn;
 
     use crate::{json::*, ByteString, Error, Guid};
 
@@ -527,6 +527,36 @@ impl FromStr for NodeId {
         Identifier::from_str(t.as_str())
             .map(|t| NodeId::new(namespace, t))
             .map_err(|_| StatusCode::BadNodeIdInvalid)
+    }
+}
+
+impl<'a> From<&'a str> for NodeId {
+    fn from(value: &'a str) -> Self {
+        (0u16, value).into()
+    }
+}
+
+impl From<UAString> for NodeId {
+    fn from(value: UAString) -> Self {
+        (0u16, value).into()
+    }
+}
+
+impl From<u32> for NodeId {
+    fn from(value: u32) -> Self {
+        (0, value).into()
+    }
+}
+
+impl From<Guid> for NodeId {
+    fn from(value: Guid) -> Self {
+        (0, value).into()
+    }
+}
+
+impl From<ByteString> for NodeId {
+    fn from(value: ByteString) -> Self {
+        (0, value).into()
     }
 }
 

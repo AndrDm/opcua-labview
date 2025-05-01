@@ -10,7 +10,6 @@ use std::{
 
 use arc_swap::ArcSwap;
 use futures::{future::Either, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
-use log::{error, info, warn};
 use opcua_core::{sync::RwLock, trace_read_lock, trace_write_lock};
 use opcua_nodes::DefaultTypeTree;
 use tokio::{
@@ -20,11 +19,13 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 use opcua_core::{config::Config, handle::AtomicHandle};
 use opcua_crypto::CertificateStore;
 
 use crate::{
+    diagnostics::ServerDiagnostics,
     node_manager::{DefaultTypeTreeGetter, ServerContext},
     session::controller::{ControllerCommand, SessionStarter},
     transport::tcp::{TcpConnector, TransportConfig},
@@ -162,6 +163,10 @@ impl Server {
                 .type_tree_getter
                 .unwrap_or_else(|| Arc::new(DefaultTypeTreeGetter)),
             type_loaders: RwLock::new(builder.type_loaders),
+            diagnostics: ServerDiagnostics {
+                enabled: config.diagnostics,
+                ..Default::default()
+            },
         };
 
         let certificate_store = Arc::new(RwLock::new(certificate_store));
@@ -274,7 +279,7 @@ impl Server {
     ///
     /// This is useful for testing, as you can bind a `TcpListener` to port `0` auto-assign
     /// a port.
-    pub async fn run_with(&mut self, listener: TcpListener) -> Result<(), String> {
+    pub async fn run_with(&mut self, listener: TcpListener) -> Result<(), String> { //& added .AD.
         let context = ServerContext {
             node_managers: self.node_managers.as_weak(),
             subscriptions: self.subscriptions.clone(),
@@ -386,7 +391,7 @@ impl Server {
     }
 
     /// Run the server. The provided `token` can be used to stop the server gracefully.
-    pub async fn run(&mut self) -> Result<(), String> {
+    pub async fn run(&mut self) -> Result<(), String> { // MUT ADDED .AD.
         let addr = self.get_socket_address();
 
         let Some(addr) = addr else {

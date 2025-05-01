@@ -6,8 +6,8 @@ use std::{
     io::{BufRead, Cursor},
 };
 
-use log::trace;
 use tokio::io::AsyncWriteExt;
+use tracing::trace;
 
 use crate::{
     comms::{chunker::Chunker, message_chunk::MessageChunk, secure_channel::SecureChannel},
@@ -81,7 +81,6 @@ impl SendBuffer {
             return Ok(());
         };
 
-        trace!("Sending chunk {:?}", next_chunk);
         let size = match next_chunk {
             PendingPayload::Chunk(c) => secure_channel.apply_security(&c, self.buffer.get_mut())?,
             PendingPayload::Ack(a) => {

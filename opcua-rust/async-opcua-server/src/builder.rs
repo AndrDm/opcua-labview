@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
-use log::warn;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 use crate::{constants, node_manager::TypeTreeForUser};
 use opcua_core::config::Config;
@@ -45,7 +45,7 @@ impl Default for ServerBuilder {
                         super::node_manager::memory::CoreNodeManagerBuilder,
                     ),
                 )
-                .with_node_manager(super::node_manager::memory::DiagnosticsNodeManagerBuilder)
+                .with_node_manager(super::diagnostics::DiagnosticsNodeManagerBuilder)
         }
         #[cfg(not(feature = "generated-address-space"))]
         builder
@@ -547,6 +547,13 @@ impl ServerBuilder {
     /// If the user sends a type not in any registered type loader, decoding will fail.
     pub fn with_type_loader(mut self, loader: Arc<dyn TypeLoader>) -> Self {
         self.type_loaders.add(loader);
+        self
+    }
+
+    /// Set whether to enable diagnostics on the server or not.
+    /// Only users with the right permissions can read the diagnostics
+    pub fn diagnostics_enabled(mut self, enabled: bool) -> Self {
+        self.config.diagnostics = enabled;
         self
     }
 }

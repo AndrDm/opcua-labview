@@ -66,7 +66,7 @@ checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
 name = "async-opcua"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "async-opcua-client",
  "async-opcua-core",
@@ -78,13 +78,11 @@ dependencies = [
  "async-opcua-types",
  "async-opcua-xml",
  "chrono",
- "env_logger",
- "log",
 ]
 
 [[package]]
 name = "async-opcua-client"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "arc-swap",
  "async-opcua-core",
@@ -95,35 +93,35 @@ dependencies = [
  "chrono",
  "futures",
  "hashbrown",
- "log",
  "parking_lot",
  "rsa",
  "serde",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
 name = "async-opcua-core"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "async-opcua-crypto",
  "async-opcua-types",
  "bytes",
  "chrono",
- "log",
  "parking_lot",
  "serde",
  "serde_yaml",
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
  "url",
 ]
 
 [[package]]
 name = "async-opcua-core-namespace"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "async-opcua-nodes",
  "async-opcua-types",
@@ -131,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "async-opcua-crypto"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "aes",
  "async-opcua-types",
@@ -140,18 +138,18 @@ dependencies = [
  "const-oid",
  "gethostname",
  "hmac",
- "log",
  "rand",
  "rsa",
  "serde",
  "sha1",
  "sha2",
+ "tracing",
  "x509-cert",
 ]
 
 [[package]]
 name = "async-opcua-macros"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "base64",
  "convert_case",
@@ -163,21 +161,21 @@ dependencies = [
 
 [[package]]
 name = "async-opcua-nodes"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "async-opcua-macros",
  "async-opcua-types",
  "async-opcua-xml",
  "bitflags",
  "hashbrown",
- "log",
  "regex",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
 name = "async-opcua-server"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "arc-swap",
  "async-opcua-core",
@@ -190,18 +188,19 @@ dependencies = [
  "chrono",
  "futures",
  "hashbrown",
- "log",
  "parking_lot",
  "postcard",
  "regex",
  "serde",
  "tokio",
  "tokio-util",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]
 name = "async-opcua-types"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "async-opcua-macros",
  "async-opcua-xml",
@@ -210,17 +209,17 @@ dependencies = [
  "byteorder",
  "chrono",
  "hashbrown",
- "log",
  "percent-encoding-rfc3986",
  "regex",
  "struson",
  "thiserror",
+ "tracing",
  "uuid",
 ]
 
 [[package]]
 name = "async-opcua-xml"
-version = "0.14.0"
+version = "0.15.1"
 dependencies = [
  "chrono",
  "quick-xml",
@@ -502,19 +501,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
-name = "env_logger"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -739,12 +725,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "hermit-abi"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbd780fe5cc30f81464441920d82ac8740e2e46b29a6fad543ddd075229ce37e"
-
-[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -752,12 +732,6 @@ checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
 ]
-
-[[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "iana-time-zone"
@@ -939,17 +913,6 @@ checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "block-padding",
  "generic-array",
-]
-
-[[package]]
-name = "is-terminal"
-version = "0.4.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1173,6 +1136,26 @@ name = "percent-encoding-rfc3986"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3637c05577168127568a64e9dc5a6887da720efef07b3d9472d45f63ab191166"
+
+[[package]]
+name = "pin-project"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "677f1add503faace112b9f1373e43e9e054bfdd22ff1a63c1bc485eaec6a6a8a"
+dependencies = [
+ "pin-project-internal",
+]
+
+[[package]]
+name = "pin-project-internal"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "pin-project-lite"
@@ -1609,15 +1592,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "termcolor"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
-dependencies = [
- "winapi-util",
-]
-
-[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1717,6 +1691,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "tracing"
+version = "0.1.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
+dependencies = [
+ "log",
+ "pin-project-lite",
+ "tracing-attributes",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "tracing-core"
+version = "0.1.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "tracing-futures"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
+dependencies = [
+ "pin-project",
+ "tracing",
 ]
 
 [[package]]
@@ -1852,15 +1868,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "winapi-util"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
-dependencies = [
- "windows-sys 0.59.0",
 ]
 
 [[package]]

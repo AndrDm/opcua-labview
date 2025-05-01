@@ -230,7 +230,7 @@ impl UaNullable for ExtensionObject {}
 mod json {
     use std::io::{Cursor, Read};
 
-    use crate::{json::*, xml::enter_first_tag, ByteString, Error, NodeId};
+    use crate::{json::*, ByteString, Error, NodeId};
 
     use super::ExtensionObject;
 
@@ -345,7 +345,7 @@ mod json {
                         let mut cursor = Cursor::new(string_body.as_bytes());
                         let mut inner_stream =
                             crate::xml::XmlStreamReader::new(&mut cursor as &mut dyn Read);
-                        if enter_first_tag(&mut inner_stream)? {
+                        if crate::xml::enter_first_tag(&mut inner_stream)? {
                             Ok(ctx.load_from_xml(&type_id, &mut inner_stream)?)
                         } else {
                             Ok(ExtensionObject::null())
@@ -353,7 +353,7 @@ mod json {
                     }
                     #[cfg(not(feature = "xml"))]
                     {
-                        log::warn!("XML feature is not enabled, deserializing XML payloads in JSON extension objects is not supported");
+                        tracing::warn!("XML feature is not enabled, deserializing XML payloads in JSON extension objects is not supported");
                         Ok(ExtensionObject::null())
                     }
                 } else {
@@ -559,7 +559,7 @@ impl BinaryDecodable for ExtensionObject {
 
                 #[cfg(not(feature = "xml"))]
                 {
-                    log::warn!("XML feature is not enabled, deserializing XML payloads in JSON extension objects is not supported");
+                    tracing::warn!("XML feature is not enabled, deserializing XML payloads in JSON extension objects is not supported");
                     let size = i32::decode(stream, ctx)?;
                     if size > 0 {
                         crate::encoding::skip_bytes(stream, size as u64)?;

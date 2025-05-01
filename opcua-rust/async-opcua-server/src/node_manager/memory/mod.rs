@@ -2,7 +2,6 @@
 //! all its nodes in memory, and delegates implementing
 //! details to a type implementing [InMemoryNodeManagerImpl].
 
-mod diagnostics;
 mod memory_mgr_impl;
 mod simple;
 
@@ -12,11 +11,10 @@ mod core;
 #[cfg(feature = "generated-address-space")]
 pub use core::{CoreNodeManager, CoreNodeManagerBuilder, CoreNodeManagerImpl};
 
-pub use diagnostics::{DiagnosticsNodeManager, DiagnosticsNodeManagerBuilder, NamespaceMetadata};
-use log::warn;
 pub use memory_mgr_impl::*;
 use opcua_core::{trace_read_lock, trace_write_lock};
 pub use simple::*;
+use tracing::warn;
 
 use std::{
     collections::{HashSet, VecDeque},
@@ -31,6 +29,7 @@ use crate::{
         read_node_value, user_access_level, AccessLevel, EventNotifier, NodeType,
         ReferenceDirection,
     },
+    diagnostics::NamespaceMetadata,
     subscriptions::CreateMonitoredItem,
     SubscriptionCache,
 };

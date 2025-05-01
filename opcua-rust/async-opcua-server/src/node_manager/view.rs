@@ -7,7 +7,6 @@ use crate::{
         instance::Session,
     },
 };
-use log::warn;
 use opcua_crypto::random;
 use opcua_nodes::TypeTree;
 use opcua_types::{
@@ -15,6 +14,7 @@ use opcua_types::{
     BrowseResultMask, ByteString, ExpandedNodeId, LocalizedText, NodeClass, NodeClassMask, NodeId,
     QualifiedName, ReferenceDescription, RelativePathElement, StatusCode,
 };
+use tracing::warn;
 
 use super::{NodeManager, RequestContext};
 
@@ -35,6 +35,8 @@ pub struct NodeMetadata {
 }
 
 impl NodeMetadata {
+    /// Convert this metadata into a ReferenceDescription with given
+    /// direction and reference type ID.
     pub fn into_ref_desc(
         self,
         is_forward: bool,

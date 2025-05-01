@@ -1,33 +1,34 @@
 mod base_constants;
-mod enum_type;
+mod encoding_ids;
 mod gen;
-mod loader;
-mod structure;
+mod loaders;
 
 pub use base_constants::*;
-pub use enum_type::{EnumType, EnumValue};
-pub use gen::{CodeGenItemConfig, CodeGenerator, EncodingIds, GeneratedItem, ItemDefinition};
-pub use loader::{BsdTypeLoader, LoadedType, LoadedTypes};
-use opcua_xml::load_bsd_file;
+pub use encoding_ids::EncodingIds;
+pub use gen::{CodeGenItemConfig, CodeGenerator, GeneratedItem, ItemDefinition};
+use loaders::NodeSetTypeLoader;
+pub use loaders::{BsdTypeLoader, LoadedType, LoadedTypes};
 use proc_macro2::TokenStream;
 use quote::quote;
-pub use structure::{StructureField, StructureFieldType, StructuredType};
 use syn::{parse_quote, parse_str, Item, Path};
+use tracing::info;
 
-use crate::{CodeGenError, TypeCodeGenTarget, BASE_NAMESPACE};
+use crate::{
+    input::{BinarySchemaInput, NodeSetInput, SchemaCache},
+    CodeGenError, TypeCodeGenTarget, BASE_NAMESPACE,
+};
 
 pub fn generate_types(
     target: &TypeCodeGenTarget,
-    root_path: &str,
+    input: &BinarySchemaInput,
 ) -> Result<(Vec<GeneratedItem>, String), CodeGenError> {
-    println!("Loading types from {}", target.file_path);
-    let data = std::fs::read_to_string(format!("{}/{}", root_path, &target.file_path))
-        .map_err(|e| CodeGenError::io(&format!("Failed to read file {}", target.file_path), e))?;
-    let type_dictionary =
-        load_bsd_file(&data).map_err(|e| CodeGenError::from(e).in_file(&target.file_path))?;
-    println!(
+    if target.node_ids_from_nodeset {
+        return Err(CodeGenError::other("Invalid config. node_ids_from_nodeset is not valid when using a BSD file for code generation."));
+    }
+
+    info!(
         "Found {} raw elements in the type dictionary.",
-        type_dictionary.elements.len()
+        input.xml.elements.len()
     );
     let type_loader = BsdTypeLoader::new(
         target
@@ -37,14 +38,44 @@ pub fn generate_types(
             .chain(base_ignored_types().into_iter())
             .collect(),
         base_native_type_mappings(),
-        type_dictionary,
+        &input.xml,
     )?;
     let target_namespace = type_loader.target_namespace();
-    let types = type_loader
-        .from_bsd()
-        .map_err(|e| e.in_file(&target.file_path))?;
-    println!("Generated code for {} types", types.len());
+    let types = type_loader.from_bsd().map_err(|e| e.in_file(&input.path))?;
+    info!("Loaded {} types", types.len());
 
+    generate_types_inner(target, target_namespace, types)
+}
+
+pub fn generate_types_nodeset(
+    target: &TypeCodeGenTarget,
+    input: &NodeSetInput,
+    cache: &SchemaCache,
+    preferred_locale: &str,
+) -> Result<(Vec<GeneratedItem>, String), CodeGenError> {
+    let type_loader = NodeSetTypeLoader::new(
+        target
+            .ignore
+            .iter()
+            .cloned()
+            .chain(base_ignored_types())
+            .collect(),
+        base_native_type_mappings(),
+        input,
+        preferred_locale,
+    );
+    let target_namespace = input.uri.clone();
+    let types = type_loader.load_types(cache)?;
+    info!("Loaded {} types", types.len());
+
+    generate_types_inner(target, target_namespace, types)
+}
+
+fn generate_types_inner(
+    target: &TypeCodeGenTarget,
+    target_namespace: String,
+    types: Vec<LoadedType>,
+) -> Result<(Vec<GeneratedItem>, String), CodeGenError> {
     let mut types_import_map = basic_types_import_map();
     for (k, v) in &target.types_import_map {
         types_import_map.insert(k.clone(), v.clone());
@@ -63,8 +94,10 @@ pub fn generate_types(
         CodeGenItemConfig {
             enums_single_file: target.enums_single_file,
             structs_single_file: target.structs_single_file,
+            node_ids_from_nodeset: target.node_ids_from_nodeset,
         },
         target_namespace.clone(),
+        target.id_path.clone(),
     );
 
     Ok((generator.generate_types()?, target_namespace))
@@ -141,13 +174,13 @@ fn binary_loader_impl(
 ) -> (TokenStream, TokenStream) {
     let mut fields = quote! {};
     for (ids, typ) in ids {
-        let dt_ident = &ids.data_type;
-        let enc_ident = &ids.binary;
+        let dt_expr = &ids.data_type;
+        let enc_expr = &ids.binary;
         let typ_path: Path = parse_str(typ).unwrap();
         fields.extend(quote! {
             inst.add_binary_type(
-                crate::DataTypeId::#dt_ident as u32,
-                crate::ObjectId::#enc_ident as u32,
+                #dt_expr,
+                #enc_expr,
                 opcua::types::binary_decode_to_enc::<#typ_path>
             );
         });
@@ -194,13 +227,13 @@ fn binary_loader_impl(
 fn json_loader_impl(ids: &[&(EncodingIds, String)], namespace: &str) -> (TokenStream, TokenStream) {
     let mut fields = quote! {};
     for (ids, typ) in ids {
-        let dt_ident = &ids.data_type;
-        let enc_ident = &ids.json;
+        let dt_expr = &ids.data_type;
+        let enc_expr = &ids.json;
         let typ_path: Path = parse_str(typ).unwrap();
         fields.extend(quote! {
             inst.add_json_type(
-                crate::DataTypeId::#dt_ident as u32,
-                crate::ObjectId::#enc_ident as u32,
+                #dt_expr,
+                #enc_expr,
                 opcua::types::json_decode_to_enc::<#typ_path>
             );
         });
@@ -248,13 +281,13 @@ fn json_loader_impl(ids: &[&(EncodingIds, String)], namespace: &str) -> (TokenSt
 fn xml_loader_impl(ids: &[&(EncodingIds, String)], namespace: &str) -> (TokenStream, TokenStream) {
     let mut fields = quote! {};
     for (ids, typ) in ids {
-        let dt_ident = &ids.data_type;
-        let enc_ident = &ids.xml;
+        let dt_expr = &ids.data_type;
+        let enc_expr = &ids.xml;
         let typ_path: Path = parse_str(typ).unwrap();
         fields.extend(quote! {
             inst.add_xml_type(
-                crate::DataTypeId::#dt_ident as u32,
-                crate::ObjectId::#enc_ident as u32,
+                #dt_expr,
+                #enc_expr,
                 opcua::types::xml_decode_to_enc::<#typ_path>
             );
         });

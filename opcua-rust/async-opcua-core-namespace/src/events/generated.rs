@@ -79,8 +79,9 @@ pub struct AudioVariableType {
 pub struct AuditActivateSessionEventType {
     pub base: AuditSessionEventType,
     pub client_software_certificates: types::SignedSoftwareCertificate,
+    pub current_role_ids: types::NodeId,
     pub secure_channel_id: opcua::types::UAString,
-    pub user_identity_token: types::UserIdentityToken,
+    pub user_identity_token: opcua::types::ExtensionObject,
 }
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=2091")]
@@ -154,10 +155,10 @@ pub struct AuditClientEventType {
 #[opcua(identifier = "i=23926")]
 pub struct AuditClientUpdateMethodResultEventType {
     pub base: AuditClientEventType,
-    pub input_arguments: types::Variant,
-    pub method_id: types::NodeId,
-    pub object_id: types::NodeId,
-    pub output_arguments: types::Variant,
+    pub input_arguments: opcua::types::ExtensionObject,
+    pub method_id: types::ExpandedNodeId,
+    pub object_id: types::ExpandedNodeId,
+    pub output_arguments: opcua::types::ExtensionObject,
     pub status_code_id: types::StatusCode,
 }
 #[derive(Debug, opcua::Event)]
@@ -373,15 +374,17 @@ pub struct AuditUpdateEventType {
 #[opcua(identifier = "i=2127")]
 pub struct AuditUpdateMethodEventType {
     pub base: AuditEventType,
-    pub input_arguments: types::Variant,
+    pub input_arguments: opcua::types::ExtensionObject,
     pub method_id: types::NodeId,
+    pub output_arguments: opcua::types::ExtensionObject,
+    pub status_code_id: types::StatusCode,
 }
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=2315")]
 pub struct AuditUpdateStateEventType {
     pub base: AuditUpdateMethodEventType,
-    pub new_state_id: types::Variant,
-    pub old_state_id: types::Variant,
+    pub new_state_id: opcua::types::ExtensionObject,
+    pub old_state_id: opcua::types::ExtensionObject,
 }
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=2748")]
@@ -395,8 +398,8 @@ pub struct AuditWriteUpdateEventType {
     pub base: AuditUpdateEventType,
     pub attribute_id: u32,
     pub index_range: types::NumericRange,
-    pub new_value: types::Variant,
-    pub old_value: types::Variant,
+    pub new_value: opcua::types::ExtensionObject,
+    pub old_value: opcua::types::ExtensionObject,
 }
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=2132")]
@@ -415,7 +418,7 @@ pub struct CertificateExpirationAlarmType {
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=12620")]
 pub struct CertificateUpdatedAuditEventType {
-    pub base: AuditEventType,
+    pub base: AuditUpdateMethodEventType,
     pub certificate_group: types::NodeId,
     pub certificate_type: types::NodeId,
 }
@@ -450,7 +453,7 @@ pub struct ConditionType {
 #[derive(Debug, opcua::EventField, Default)]
 pub struct ConditionVariableType {
     pub node_id: opcua::types::NodeId,
-    pub value: types::Variant,
+    pub value: opcua::types::ExtensionObject,
     pub source_timestamp: types::UtcTime,
 }
 #[derive(Debug, opcua::Event)]
@@ -643,13 +646,13 @@ pub struct ProgramTransitionAuditEventType {
 #[opcua(identifier = "i=2378")]
 pub struct ProgramTransitionEventType {
     pub base: TransitionEventType,
-    pub intermediate_result: types::Variant,
+    pub intermediate_result: opcua::types::ExtensionObject,
 }
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=11436")]
 pub struct ProgressEventType {
     pub base: opcua::nodes::BaseEventType,
-    pub context: types::Variant,
+    pub context: opcua::types::ExtensionObject,
     pub progress: u16,
 }
 #[derive(Debug, opcua::Event)]
@@ -736,7 +739,7 @@ pub struct StateVariableType {
     pub node_id: opcua::types::NodeId,
     pub value: types::LocalizedText,
     pub effective_display_name: types::LocalizedText,
-    pub id: types::Variant,
+    pub id: opcua::types::ExtensionObject,
     pub name: types::QualifiedName,
     pub number: u32,
 }
@@ -779,7 +782,7 @@ pub struct TransitionVariableType {
     pub node_id: opcua::types::NodeId,
     pub value: types::LocalizedText,
     pub effective_transition_time: types::UtcTime,
-    pub id: types::Variant,
+    pub id: opcua::types::ExtensionObject,
     pub name: types::QualifiedName,
     pub number: u32,
     pub transition_time: types::UtcTime,
@@ -800,7 +803,7 @@ pub struct TrustListOutOfDateAlarmType {
 #[derive(Debug, opcua::Event)]
 #[opcua(identifier = "i=12561")]
 pub struct TrustListUpdatedAuditEventType {
-    pub base: AuditEventType,
+    pub base: AuditUpdateMethodEventType,
     pub trust_list_id: types::NodeId,
 }
 #[derive(Debug, opcua::Event)]

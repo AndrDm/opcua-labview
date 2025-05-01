@@ -30,7 +30,7 @@ winres = "0.1"
 
 [dependencies.async-opcua]
 path = "../opcua-rust/async-opcua"
-features = ["client", "server", "console-logging", "json", "xml"]
+features = ["client", "server", "json", "xml"]
 default-features = false
 
 [target.'cfg(windows)'.build-dependencies]

@@ -12,6 +12,8 @@ use std::{
 
 use regex::Regex;
 
+use crate::{impl_encoded_as, Error, UAString, UaNullable};
+
 #[derive(Debug)]
 /// Error returned when parsing a numeric range.
 pub struct NumericRangeError;
@@ -72,6 +74,60 @@ impl NumericRange {
     pub fn is_none(&self) -> bool {
         matches!(self, NumericRange::None)
     }
+
+    fn byte_len(&self) -> usize {
+        // String length field = 4 bytes.
+        4 + match self {
+            NumericRange::None => 0,
+            // Length of a decimal number as string.
+            NumericRange::Index(i) => num_len(*i),
+            // Length of two decimal numbers as string, plus colon.
+            NumericRange::Range(l, r) => num_len(*l) + num_len(*r) + 1,
+            NumericRange::MultipleRanges(numeric_ranges) => {
+                numeric_ranges.iter().map(|r| r.byte_len()).sum::<usize>() + numeric_ranges.len()
+                    - 1
+            }
+        }
+    }
+
+    fn from_ua_string(str: UAString) -> Result<Self, Error> {
+        str.as_ref()
+            .parse::<NumericRange>()
+            .map_err(Error::decoding)
+    }
+
+    fn to_ua_string(&self) -> Result<UAString, Error> {
+        match self {
+            NumericRange::None => Ok(UAString::null()),
+            _ => Ok(UAString::from(self.to_string())),
+        }
+    }
+}
+
+impl_encoded_as!(
+    NumericRange,
+    NumericRange::from_ua_string,
+    NumericRange::to_ua_string,
+    NumericRange::byte_len
+);
+
+fn num_len(n: u32) -> usize {
+    if n == 0 {
+        1
+    } else {
+        n.ilog10() as usize + 1
+    }
+}
+
+impl UaNullable for NumericRange {
+    fn is_ua_null(&self) -> bool {
+        self.is_none()
+    }
+}
+
+#[cfg(feature = "xml")]
+impl crate::xml::XmlType for NumericRange {
+    const TAG: &'static str = "NumericRange";
 }
 
 // Valid inputs

@@ -12,6 +12,7 @@ use opcua_xml::schema::{
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::Path;
+use tracing::warn;
 
 use crate::{
     utils::{safe_ident, RenderExpr},
@@ -123,7 +124,7 @@ impl<'a> ValueBuilder<'a> {
                 }
             }
             Variant::XmlElement(_) | Variant::ListOfXmlElement(_) => {
-                println!("XmlElement not yet supported in codegen");
+                warn!("XmlElement not yet supported in codegen");
                 return Ok(quote::quote! {
                     opcua::types::Variant::Empty
                 });
